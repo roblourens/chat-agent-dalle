@@ -10,20 +10,35 @@ import * as crypto from 'crypto';
 import * as https from 'https';
 import sharp from 'sharp';
 
-// let resultUrl = 'https://oaidalleapiprodscus.blob.core.windows.net/private/org-GCifzsS2YEPJFMLyBSfXg6ue/user-rMIIzmDnrKmSkPD9JXdfwLym/img-XqDsKppqvxUSpyhdkSwNMhxn.png?st=2023-11-12T18%3A59%3A05Z&se=2023-11-12T20%3A59%3A05Z&sp=r&sv=2021-08-06&sr=b&rscd=inline&rsct=image/png&skoid=6aaadede-4fb3-4698-a8f6-684d7786b067&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2023-11-12T13%3A05%3A10Z&ske=2023-11-13T13%3A05%3A10Z&sks=b&skv=2021-08-06&sig=J1hNtHHFB1DCqo6GIS%2Bj3u3PcqZwLzpNajKbT8SPBug%3D';
-let resultUrl: string | undefined;
-
 export function activate(extContext: vscode.ExtensionContext) {
 
 	const agent = vscode.chat.createChatAgent('dalle', async (request, context, progress, token) => {
-		const userPrompt = request.prompt || 'A photo of a bicyclist carrying a laptop and writing code while simultaneously riding a bike.';
+		let imageGenPrompt = request.prompt || 'A photo of a bicyclist in Seattle carrying a laptop and writing code while simultaneously riding a bike.';
 
-		// const access = await vscode.chat.requestChatAccess('copilot');
-		// access.makeRequest([
-		// 	{ role: vscode.ChatMessageRole.System, content: 'You write creative prompts for an AI image generator. The user' },
-		// 	{ role: vscode.ChatMessageRole.User, content: userPrompt }
-		// ], { }, token);
+		const reg = /(^|\s)\[(#)([\w_\-]+)(:[\w_\-\.]+)?\]\(values:([\w_\-]+)(:[\w_\-\.]+)?\)/ig;
+		imageGenPrompt = imageGenPrompt.replace(reg, '');
+		if (request.variables['git']) {
+			const git = request.variables['git'][0];
+			let fullBranchName = git.value.match(/Current Branch name: (.*)/i)![1];
+			const branchName = fullBranchName.split('/')[1] || fullBranchName;
+			const access = await vscode.chat.requestChatAccess('copilot');
+			const promptRequest = access.makeRequest([
+				{ role: vscode.ChatMessageRole.System, content: 'You write creative prompts for an AI image generator. The user will give a short phrase, and you must generate a prompt for DALL-E based on that phrase. Don\'t forget to include the art style for the image. For example, it could be an oil painting, a photograph, a cartoon, a charcoal drawing, or something else. Reply with the prompt and no other text.' },
+				{ role: vscode.ChatMessageRole.User, content: branchName },
+			], {}, token);
 
+			let prompt = '';
+			for await (const chunk of promptRequest.response) {
+				prompt += chunk;
+			}
+
+			imageGenPrompt = prompt;
+
+			progress.report({ content: `**Branch name**: ${fullBranchName}\n\n` });
+			progress.report({ content: `**Prompt**: ${imageGenPrompt}\n\n` });
+		}
+
+		let resultUrl: string | undefined;
 		if (!resultUrl) {
 			const key = await getUserAiKey(extContext);
 			if (!key) {
@@ -32,7 +47,7 @@ export function activate(extContext: vscode.ExtensionContext) {
 
 			const openai = new OpenAI({ apiKey: key });
 			const imageGen = await openai.images.generate({
-				prompt: userPrompt,
+				prompt: imageGenPrompt,
 				model: "dall-e-3",
 				n: 1,
 				size: '1024x1024',
@@ -56,7 +71,13 @@ export function activate(extContext: vscode.ExtensionContext) {
 			.resize({ width: 400 })
 			.toFile(smallFilePath);
 
-		const content = `Here ya go:\n\n![image](file://${smallFilePath})\n\nHave a great day!`;
+		const content = `Here ya go:
+		
+![image](file://${smallFilePath})
+
+[Full size](${resultUrl})
+
+Have a great day!`;
 		progress.report({ content });
 
 		return {};
