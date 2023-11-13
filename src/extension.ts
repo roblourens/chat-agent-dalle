@@ -9,10 +9,15 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import * as https from 'https';
 import sharp from 'sharp';
+import { GitExtension } from './git';
 
 export function activate(extContext: vscode.ExtensionContext) {
 
-	const agent = vscode.chat.createChatAgent('dalle', async (request, context, progress, token) => {
+	const agent = vscode.chat.createChatAgent('dall-e', async (request, context, progress, token) => {
+		if (request.slashCommand?.name === 'affirmation') {
+			return handleAffirmation(extContext, request, context, progress, token);
+		}
+
 		let imageGenPrompt = request.prompt || 'A photo of a bicyclist in Seattle carrying a laptop and writing code while simultaneously riding a bike.';
 
 		const reg = /(^|\s)\[(#)([\w_\-]+)(:[\w_\-\.]+)?\]\(values:([\w_\-]+)(:[\w_\-\.]+)?\)/ig;
@@ -38,39 +43,7 @@ export function activate(extContext: vscode.ExtensionContext) {
 			progress.report({ content: `**Prompt**: ${imageGenPrompt}\n\n` });
 		}
 
-		let resultUrl: string | undefined;
-		if (!resultUrl) {
-			const key = await getUserAiKey(extContext);
-			if (!key) {
-				throw new Error('Missing OpenAI API key');
-			}
-
-			const openai = new OpenAI({ apiKey: key });
-			const imageGen = await openai.images.generate({
-				prompt: imageGenPrompt,
-				model: "dall-e-3",
-				n: 1,
-				size: '1024x1024',
-				quality: "standard",
-			});
-			resultUrl = imageGen.data[0].url!;
-		}
-
-		console.log(resultUrl);
-
-		const randomFileName = crypto.randomBytes(20).toString('hex');
-		const tempFileWithoutExtension = path.join(os.tmpdir(), 'chat-agent-dalle', `${randomFileName}`);
-		const tmpFilePath = tempFileWithoutExtension + '.png';
-		console.log(tmpFilePath);
-
-		await downloadFile(resultUrl!, tmpFilePath);
-
-		const smallFilePath = tempFileWithoutExtension + '-small.png';
-		const inputBuffer = await fs.promises.readFile(tmpFilePath);
-		await sharp(inputBuffer)
-			.resize({ width: 400 })
-			.toFile(smallFilePath);
-
+		const { smallFilePath, resultUrl } = await getAiImage(extContext, imageGenPrompt);
 		const content = `Here ya go:
 		
 ![image](file://${smallFilePath})
@@ -83,10 +56,83 @@ Have a great day!`;
 		return {};
 	});
 
+	agent.description = 'Use Dall-E';
+	agent.fullName = 'Dall-E';
+	agent.slashCommandProvider = {
+		provideSlashCommands(token) {
+			return [{ name: 'affirmation', description: 'Sometimes we need a context-aware affirmation from a happy cute animal!' }];
+		},
+	};
+
 	extContext.subscriptions.push(agent);
 }
 
 export function deactivate() {
+}
+
+async function handleAffirmation(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+	const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
+	const diff = await gitExtension?.exports.getAPI(1).repositories[0].diff();
+	console.log(diff);
+
+	const access = await vscode.chat.requestChatAccess('copilot');
+	const promptRequest = diff ?
+		access.makeRequest([
+			{ role: vscode.ChatMessageRole.System, content: 'Here is a user\'s git diff. Please write a very short one-sentence compliment about the added lines of code. MUST be fewer than 10 words, but it should focus on one part of the code in detail. It should be over-the-top complimentary and use exclamation marks! Do not use emoji.' },
+			{ role: vscode.ChatMessageRole.User, content: diff },
+		], {}, token) :
+		access.makeRequest([
+			{ role: vscode.ChatMessageRole.System, content: 'Write a motivational message for a programmer. It should be over-the-top complimentary and use exclamation marks! And tell them that they are good at what they do. Less than 10 words.' },
+		], {}, token);
+
+	let prompt = '';
+	for await (const chunk of promptRequest.response) {
+		prompt += chunk;
+	}
+
+	const imageGenPrompt = `A motivational image for a programmer. It should contain a cute happy animal. Art style: cartoon. It should say: "${prompt}"`;
+	const { smallFilePath, resultUrl } = await getAiImage(extContext, imageGenPrompt);
+	const content = `![image](file://${smallFilePath})
+
+[Full size](${resultUrl})
+
+${prompt}`;
+	progress.report({ content });
+
+	return {};
+};
+
+async function getAiImage(extContext: vscode.ExtensionContext, imageGenPrompt: string): Promise<{ smallFilePath: string; resultUrl: string; }> {
+	const key = await getUserAiKey(extContext);
+	if (!key) {
+		throw new Error('Missing OpenAI API key');
+	}
+
+	const openai = new OpenAI({ apiKey: key });
+	const imageGen = await openai.images.generate({
+		prompt: imageGenPrompt,
+		model: "dall-e-3",
+		n: 1,
+		size: '1024x1024',
+		quality: "standard",
+	});
+	const resultUrl = imageGen.data[0].url!;
+	console.log(resultUrl);
+
+	const randomFileName = crypto.randomBytes(20).toString('hex');
+	const tempFileWithoutExtension = path.join(os.tmpdir(), 'chat-agent-dalle', `${randomFileName}`);
+	const tmpFilePath = tempFileWithoutExtension + '.png';
+	console.log(tmpFilePath);
+
+	await downloadFile(resultUrl!, tmpFilePath);
+
+	const smallFilePath = tempFileWithoutExtension + '-small.png';
+	const inputBuffer = await fs.promises.readFile(tmpFilePath);
+	await sharp(inputBuffer)
+		.resize({ width: 400 })
+		.toFile(smallFilePath);
+
+	return { smallFilePath, resultUrl };
 }
 
 const keyName = 'openai.aiKey';
