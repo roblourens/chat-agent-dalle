@@ -63,6 +63,7 @@ Have a great day!`;
 			return [{ name: 'affirmation', description: 'Sometimes we need a context-aware affirmation from a happy cute animal!' }];
 		},
 	};
+	agent.iconPath = new vscode.ThemeIcon('sparkle');
 
 	extContext.subscriptions.push(agent);
 }
