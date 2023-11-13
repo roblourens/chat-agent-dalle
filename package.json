@@ -11,8 +11,12 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onStartupFinished"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roblourens/chat-agent-dalle"
+  },
   "enabledApiProposals": [
     "chatAgents2",
     "chatVariables",
