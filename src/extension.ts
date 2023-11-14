@@ -16,6 +16,10 @@ export function activate(extContext: vscode.ExtensionContext) {
 	const agent = vscode.chat.createChatAgent('dall-e', async (request, context, progress, token) => {
 		if (request.slashCommand?.name === 'affirmation') {
 			return handleAffirmation(extContext, request, context, progress, token);
+		} else if (request.slashCommand?.name === 'flowchart') {
+			return handleCodeFlowVisualization(extContext, request, context, progress, token);
+		} else if (request.slashCommand?.name === 'render') {
+			return handleRender(extContext, request, context, progress, token);
 		}
 
 		let imageGenPrompt = request.prompt || 'A photo of a bicyclist in Seattle carrying a laptop and writing code while simultaneously riding a bike.';
@@ -60,7 +64,11 @@ Have a great day!`;
 	agent.fullName = 'Dall-E';
 	agent.slashCommandProvider = {
 		provideSlashCommands(token) {
-			return [{ name: 'affirmation', description: 'Sometimes we need a context-aware affirmation from a happy cute animal!' }];
+			return [
+				{ name: 'affirmation', description: 'Sometimes we need a context-aware affirmation from a happy cute animal!' },
+				{ name: 'flow', description: 'Visualize the code flow based for the current code' },
+				{ name: 'render', description: 'Preview the current code as website rendering' },
+			];
 		},
 	};
 	agent.iconPath = new vscode.ThemeIcon('sparkle');
@@ -98,6 +106,64 @@ async function handleAffirmation(extContext: vscode.ExtensionContext, request: v
 [Full size](${resultUrl})
 
 ${prompt}`;
+	progress.report({ content });
+
+	return {};
+};
+
+async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		return {};
+	}
+
+	const selection = editor.selection;
+	if (selection.isEmpty) {
+		return {};
+	}
+
+	const document = editor.document;
+	const text = document.getText(selection);
+
+	const imageGenPrompt = `Generate a whiteboard-style flowchart that visually represents the following piece of code. The flowchart should clearly illustrate the logic and flow of the code, including decision points, loops, and function calls. Use standard flowchart symbols: rectangles for operations or assignments, diamonds for decision points, ovals for start and end points, and arrows to show the flow direction. Label each symbol with brief descriptions corresponding to the code. The code consists of a simple 'if-else' statement, a 'for' loop, and a function call. Ensure the flowchart is neatly organized, easy to read, and accurately reflects the sequence and conditions in the code. Use a clean, professional style suitable for a technical presentation.
+	
+	# Code:
+	\`\`\`
+	${text}
+	\`\`\``;
+	const { smallFilePath, resultUrl } = await getAiImage(extContext, imageGenPrompt);
+	const content = `![image](file://${smallFilePath})
+
+[Full size](${resultUrl})`;
+	progress.report({ content });
+
+	return {};
+};
+
+async function handleRender(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		return {};
+	}
+
+	const selection = editor.selection;
+	if (selection.isEmpty) {
+		return {};
+	}
+
+	const document = editor.document;
+	const text = document.getText(selection);
+
+	const imageGenPrompt = `Generate a high-resolution image of a website preview, based on the provided code. The image should display a realistic rendering of what the website would look like, including layout, colors, and typography. Emphasize accuracy in translating the code into a visual representation.
+	
+	# Code:
+	\`\`\`
+	${text}
+	\`\`\``;
+	const { smallFilePath, resultUrl } = await getAiImage(extContext, imageGenPrompt);
+	const content = `![image](file://${smallFilePath})
+
+[Full size](${resultUrl})`;
 	progress.report({ content });
 
 	return {};
