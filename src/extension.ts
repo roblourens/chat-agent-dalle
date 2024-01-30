@@ -57,6 +57,10 @@ export function activate(extContext: vscode.ExtensionContext) {
 Have a great day!`;
 		progress.report({ content });
 
+	const morecontent = `  \nmore happy days`;
+	sleep(10000);
+	progress.report({ content: morecontent });
+
 		return {};
 	});
 
@@ -78,6 +82,8 @@ Have a great day!`;
 
 export function deactivate() {
 }
+
+
 
 async function handleAffirmation(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
 	const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
@@ -105,11 +111,16 @@ async function handleAffirmation(extContext: vscode.ExtensionContext, request: v
 
 [Full size](${resultUrl})
 
+	
 ${prompt}`;
 	progress.report({ content });
 
 	return {};
 };
+
+async function sleep(ms: number) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
 	const editor = vscode.window.activeTextEditor;
