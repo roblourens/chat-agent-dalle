@@ -179,7 +179,7 @@ async function getAiImage(extContext: vscode.ExtensionContext, imageGenPrompt: s
 	const openai = azureEndpoint ? new OpenAIClient(azureEndpoint, new AzureKeyCredential(key)) : new OpenAI({ apiKey: key });
 	let resultUrl = '';
 	if (azureEndpoint && openai instanceof OpenAIClient) {
-		const imageResponse = await openai.getImages(imageGenPrompt, {
+		const imageResponse = await openai.getImages(getAzureDeploymentName(),imageGenPrompt, {
 			n: 1,
 			size: '1024x1024',
 		});
@@ -215,6 +215,10 @@ async function getAiImage(extContext: vscode.ExtensionContext, imageGenPrompt: s
 
 function getAzureEndpoint() {
 	return vscode.workspace.getConfiguration('roblourens.chat-agent-dalle').get<string>('azureEndpoint');
+}
+
+function getAzureDeploymentName() {
+	return vscode.workspace.getConfiguration('roblourens.chat-agent-dalle').get<string>('deploymentName');
 }
 
 const openAIKeyName = 'openai.aiKey';
