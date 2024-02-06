@@ -31,6 +31,10 @@
           "roblourens.chat-agent-dalle.azureEndpoint": {
             "type": "string",
             "description": "The azure endpoint to make AI requests to, to generate images"
+          },
+          "roblourens.chat-agent-dalle.deploymentName": {
+            "type": "string",
+            "description": "The deployment name of the Dall-E model to use"
           }
         }
       }
@@ -63,7 +67,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "@azure/openai": "^1.0.0-beta.7",
+    "@azure/openai": "^1.0.0-beta.11",
     "openai": "^4.17.4",
     "sharp": "^0.32.6"
   }
