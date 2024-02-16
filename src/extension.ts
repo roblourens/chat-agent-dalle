@@ -11,40 +11,43 @@ import sharp from 'sharp';
 import { GitExtension } from './git';
 const { OpenAIClient, AzureKeyCredential } = require("@azure/openai");
 
+const LANGUAGE_MODEL_ID = 'copilot-gpt-4';
+
 export function activate(extContext: vscode.ExtensionContext) {
 
-	const agent = vscode.chat.createChatAgent('dall-e', async (request, context, progress, token) => {
-		if (request.slashCommand?.name === 'affirmation') {
-			return handleAffirmation(extContext, request, context, progress, token);
-		} else if (request.slashCommand?.name === 'flowchart') {
-			return handleCodeFlowVisualization(extContext, request, context, progress, token);
-		} else if (request.slashCommand?.name === 'render') {
-			return handleRender(extContext, request, context, progress, token);
+	const agent = vscode.chat.createChatAgent('dall-e', async (request, context, stream, token) => {
+		if (request. command === 'affirmation') {
+			return handleAffirmation(extContext, request, context, stream, token);
+		} else if (request.command === 'flowchart') {
+			return handleCodeFlowVisualization(extContext, request, context, stream, token);
+		} else if (request.command === 'render') {
+			return handleRender(extContext, request, context, stream, token);
 		}
 
 		let imageGenPrompt = request.prompt || 'A photo of a bicyclist in Seattle carrying a laptop and writing code while simultaneously riding a bike.';
 
 		const reg = /(^|\s)\[(#)([\w_\-]+)(:[\w_\-\.]+)?\]\(values:([\w_\-]+)(:[\w_\-\.]+)?\)/ig;
 		imageGenPrompt = imageGenPrompt.replace(reg, '');
-		if (request.variables['git']) {
-			const git = request.variables['git'][0];
-			let fullBranchName = git.value.match(/Current Branch name: (.*)/i)![1];
+		const git = request.variables.find(v => v.name === 'git');
+		const value = git?.values[0].value;
+		if (git && typeof value === 'string') {
+			let fullBranchName = value.match(/Current Branch name: (.*)/i)![1];
 			const branchName = fullBranchName.split('/')[1] || fullBranchName;
-			const access = await vscode.chat.requestChatAccess('copilot');
-			const promptRequest = access.makeRequest([
-				{ role: vscode.ChatMessageRole.System, content: 'You write creative prompts for an AI image generator. The user will give a short phrase, and you must generate a prompt for DALL-E based on that phrase. Don\'t forget to include the art style for the image. For example, it could be an oil painting, a photograph, a cartoon, a charcoal drawing, or something else. Reply with the prompt and no other text.' },
-				{ role: vscode.ChatMessageRole.User, content: branchName },
+			const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
+			const promptRequest = access.makeChatRequest([
+				new vscode.LanguageModelSystemMessage('You write creative prompts for an AI image generator. The user will give a short phrase, and you must generate a prompt for DALL-E based on that phrase. Don\'t forget to include the art style for the image. For example, it could be an oil painting, a photograph, a cartoon, a charcoal drawing, or something else. Reply with the prompt and no other text.'),
+				new vscode.LanguageModelUserMessage(branchName),
 			], {}, token);
 
 			let prompt = '';
-			for await (const chunk of promptRequest.response) {
+			for await (const chunk of promptRequest.stream) {
 				prompt += chunk;
 			}
 
 			imageGenPrompt = prompt;
 
-			progress.report({ content: `**Branch name**: ${fullBranchName}\n\n` });
-			progress.report({ content: `**Prompt**: ${imageGenPrompt}\n\n` });
+			stream.markdown(`**Branch name**: ${fullBranchName}\n\n`);
+			stream.markdown(`**Prompt**: ${imageGenPrompt}\n\n`);
 		}
 
 		const { smallFilePath, resultUrl } = await getAiImage(extContext, imageGenPrompt);
@@ -55,15 +58,15 @@ export function activate(extContext: vscode.ExtensionContext) {
 [Full size](${resultUrl})
 
 Have a great day!`;
-		progress.report({ content });
+		stream.markdown(content);
 
 		return {};
 	});
 
 	agent.description = 'Use Dall-E';
 	agent.fullName = 'Dall-E';
-	agent.slashCommandProvider = {
-		provideSlashCommands(token) {
+	agent.commandProvider = {
+		provideCommands(token) {
 			return [
 				{ name: 'affirmation', description: 'Sometimes we need a context-aware affirmation from a happy cute animal!' },
 				{ name: 'flow', description: 'Visualize the code flow based for the current code' },
@@ -79,23 +82,23 @@ Have a great day!`;
 export function deactivate() {
 }
 
-async function handleAffirmation(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+async function handleAffirmation(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
 	const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
 	const diff = await gitExtension?.exports.getAPI(1).repositories[0].diff();
 	console.log(diff);
 
-	const access = await vscode.chat.requestChatAccess('copilot');
+	const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 	const promptRequest = diff ?
-		access.makeRequest([
-			{ role: vscode.ChatMessageRole.System, content: 'Here is a user\'s git diff. Please write a very short one-sentence compliment about the added lines of code. MUST be fewer than 10 words, but it should focus on one part of the code in detail. It should be over-the-top complimentary and use exclamation marks! Do not use emoji.' },
-			{ role: vscode.ChatMessageRole.User, content: diff },
+		access.makeChatRequest([
+			new vscode.LanguageModelSystemMessage('Here is a user\'s git diff. Please write a very short one-sentence compliment about the added lines of code. MUST be fewer than 10 words, but it should focus on one part of the code in detail. It should be over-the-top complimentary and use exclamation marks! Do not use emoji.'),
+			new vscode.LanguageModelUserMessage(diff)
 		], {}, token) :
-		access.makeRequest([
-			{ role: vscode.ChatMessageRole.System, content: 'Write a motivational message for a programmer. It should be over-the-top complimentary and use exclamation marks! And tell them that they are good at what they do. Less than 10 words.' },
+		access.makeChatRequest([
+			new vscode.LanguageModelSystemMessage('Write a motivational message for a programmer. It should be over-the-top complimentary and use exclamation marks! And tell them that they are good at what they do. Less than 10 words.')
 		], {}, token);
 
 	let prompt = '';
-	for await (const chunk of promptRequest.response) {
+	for await (const chunk of promptRequest.stream) {
 		prompt += chunk;
 	}
 
@@ -106,12 +109,13 @@ async function handleAffirmation(extContext: vscode.ExtensionContext, request: v
 [Full size](${resultUrl})
 
 ${prompt}`;
-	progress.report({ content });
+	
+	stream.markdown(content);
 
 	return {};
 };
 
-async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		return {};
@@ -135,12 +139,12 @@ async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, 
 	const content = `![image](file://${smallFilePath})
 
 [Full size](${resultUrl})`;
-	progress.report({ content });
+	stream.markdown(content);
 
 	return {};
 };
 
-async function handleRender(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, progress: vscode.Progress<vscode.ChatAgentProgress>, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+async function handleRender(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		return {};
@@ -164,7 +168,7 @@ async function handleRender(extContext: vscode.ExtensionContext, request: vscode
 	const content = `![image](file://${smallFilePath})
 
 [Full size](${resultUrl})`;
-	progress.report({ content });
+	stream.markdown(content);
 
 	return {};
 };
