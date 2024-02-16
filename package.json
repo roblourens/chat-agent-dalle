@@ -19,8 +19,7 @@
   },
   "enabledApiProposals": [
     "chatAgents2",
-    "chatVariables",
-    "chatRequestAccess"
+    "languageModels"
   ],
   "main": "./dist/extension.js",
   "contributes": {
