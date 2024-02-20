@@ -15,7 +15,7 @@ const LANGUAGE_MODEL_ID = 'copilot-gpt-4';
 
 export function activate(extContext: vscode.ExtensionContext) {
 
-	const agent = vscode.chat.createChatAgent('dall-e', async (request, context, stream, token) => {
+	const agent = vscode.chat.createChatParticipant('dall-e', async (request, context, stream, token) => {
 		if (request. command === 'affirmation') {
 			return handleAffirmation(extContext, request, context, stream, token);
 		} else if (request.command === 'flowchart') {
@@ -82,7 +82,7 @@ Have a great day!`;
 export function deactivate() {
 }
 
-async function handleAffirmation(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+async function handleAffirmation(extContext: vscode.ExtensionContext, request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult> {
 	const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
 	const diff = await gitExtension?.exports.getAPI(1).repositories[0].diff();
 	console.log(diff);
@@ -115,7 +115,7 @@ ${prompt}`;
 	return {};
 };
 
-async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult> {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		return {};
@@ -144,7 +144,7 @@ async function handleCodeFlowVisualization(extContext: vscode.ExtensionContext, 
 	return {};
 };
 
-async function handleRender(extContext: vscode.ExtensionContext, request: vscode.ChatAgentRequest, context: vscode.ChatAgentContext, stream: vscode.ChatAgentResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatAgentResult2> {
+async function handleRender(extContext: vscode.ExtensionContext, request: vscode.ChatRequest, context: vscode.ChatContext, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<vscode.ChatResult> {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) {
 		return {};
