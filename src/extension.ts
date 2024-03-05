@@ -33,10 +33,9 @@ export function activate(extContext: vscode.ExtensionContext) {
 		if (git && typeof value === 'string') {
 			let fullBranchName = value.match(/Current Branch name: (.*)/i)![1];
 			const branchName = fullBranchName.split('/')[1] || fullBranchName;
-			const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
-			const promptRequest = access.makeChatRequest([
-				new vscode.LanguageModelSystemMessage('You write creative prompts for an AI image generator. The user will give a short phrase, and you must generate a prompt for DALL-E based on that phrase. Don\'t forget to include the art style for the image. For example, it could be an oil painting, a photograph, a cartoon, a charcoal drawing, or something else. Reply with the prompt and no other text.'),
-				new vscode.LanguageModelUserMessage(branchName),
+			const promptRequest = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, [
+				new vscode.LanguageModelChatSystemMessage('You write creative prompts for an AI image generator. The user will give a short phrase, and you must generate a prompt for DALL-E based on that phrase. Don\'t forget to include the art style for the image. For example, it could be an oil painting, a photograph, a cartoon, a charcoal drawing, or something else. Reply with the prompt and no other text.'),
+				new vscode.LanguageModelChatUserMessage(branchName),
 			], {}, token);
 
 			let prompt = '';
@@ -63,17 +62,6 @@ Have a great day!`;
 		return {};
 	});
 
-	agent.description = 'Use Dall-E';
-	agent.fullName = 'Dall-E';
-	agent.commandProvider = {
-		provideCommands(token) {
-			return [
-				{ name: 'affirmation', description: 'Sometimes we need a context-aware affirmation from a happy cute animal!' },
-				{ name: 'flow', description: 'Visualize the code flow based for the current code' },
-				{ name: 'render', description: 'Preview the current code as website rendering' },
-			];
-		},
-	};
 	agent.iconPath = new vscode.ThemeIcon('sparkle');
 
 	extContext.subscriptions.push(agent);
@@ -87,14 +75,13 @@ async function handleAffirmation(extContext: vscode.ExtensionContext, request: v
 	const diff = await gitExtension?.exports.getAPI(1).repositories[0].diff();
 	console.log(diff);
 
-	const access = await vscode.lm.requestLanguageModelAccess(LANGUAGE_MODEL_ID);
 	const promptRequest = diff ?
-		access.makeChatRequest([
-			new vscode.LanguageModelSystemMessage('Here is a user\'s git diff. Please write a very short one-sentence compliment about the added lines of code. MUST be fewer than 10 words, but it should focus on one part of the code in detail. It should be over-the-top complimentary and use exclamation marks! Do not use emoji.'),
-			new vscode.LanguageModelUserMessage(diff)
+		await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, [
+			new vscode.LanguageModelChatSystemMessage('Here is a user\'s git diff. Please write a very short one-sentence compliment about the added lines of code. MUST be fewer than 10 words, but it should focus on one part of the code in detail. It should be over-the-top complimentary and use exclamation marks! Do not use emoji.'),
+			new vscode.LanguageModelChatUserMessage(diff)
 		], {}, token) :
-		access.makeChatRequest([
-			new vscode.LanguageModelSystemMessage('Write a motivational message for a programmer. It should be over-the-top complimentary and use exclamation marks! And tell them that they are good at what they do. Less than 10 words.')
+		await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, [
+			new vscode.LanguageModelChatSystemMessage('Write a motivational message for a programmer. It should be over-the-top complimentary and use exclamation marks! And tell them that they are good at what they do. Less than 10 words.')
 		], {}, token);
 
 	let prompt = '';
