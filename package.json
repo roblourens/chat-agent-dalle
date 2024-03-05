@@ -19,8 +19,7 @@
   },
   "enabledApiProposals": [
     "chatParticipant",
-    "languageModels",
-    "defaultChatParticipant"
+    "languageModels"
   ],
   "main": "./dist/extension.js",
   "contributes": {
