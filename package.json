@@ -19,10 +19,22 @@
   },
   "enabledApiProposals": [
     "chatParticipant",
-    "languageModels"
+    "languageModels",
+    "defaultChatParticipant"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "chatParticipants": [
+      {
+        "name": "dall-e",
+        "description": "Use Dall-E",
+        "commands": [
+          { "name": "affirmation", "description": "Sometimes we need a context-aware affirmation from a happy cute animal!" },
+          { "name": "flow", "description": "Visualize the code flow based for the current code" },
+          { "name": "render", "description": "Preview the current code as website rendering" }
+        ]
+      }
+    ],
     "configuration": [
       {
         "title": "Dall-E Chat Agent",
