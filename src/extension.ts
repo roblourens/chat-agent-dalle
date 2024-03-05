@@ -33,7 +33,6 @@ export function activate(extContext: vscode.ExtensionContext) {
 		if (git && typeof value === 'string') {
 			let fullBranchName = value.match(/Current Branch name: (.*)/i)![1];
 			const branchName = fullBranchName.split('/')[1] || fullBranchName;
-			// const access = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID);
 			const promptRequest = await vscode.lm.sendChatRequest(LANGUAGE_MODEL_ID, [
 				new vscode.LanguageModelChatSystemMessage('You write creative prompts for an AI image generator. The user will give a short phrase, and you must generate a prompt for DALL-E based on that phrase. Don\'t forget to include the art style for the image. For example, it could be an oil painting, a photograph, a cartoon, a charcoal drawing, or something else. Reply with the prompt and no other text.'),
 				new vscode.LanguageModelChatUserMessage(branchName),
